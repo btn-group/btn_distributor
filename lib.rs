@@ -12,7 +12,10 @@ mod btn_distributor {
     };
 
     use openbrush::{
-        contracts::ownable::*, contracts::traits::psp22::PSP22Error, modifiers, traits::Storage,
+        contracts::ownable::*,
+        contracts::traits::psp22::PSP22Error,
+        modifiers,
+        traits::{Storage, String},
     };
 
     // === ENUMS ===
