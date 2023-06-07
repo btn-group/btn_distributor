@@ -193,30 +193,19 @@ mod btn_distributor {
             );
         }
 
-        // #[ink::test]
-        // fn test_increase_allowance() {
-        //     let accounts = test_utils::accounts();
-        //     test_utils::change_caller(accounts.alice);
-        //     let mut az_light_switch = LightSwitch::new(1, 1, 1);
-        //     // when called by a non-admin
-        //     test_utils::change_caller(accounts.bob);
-        //     // * it raises an error
-        //     let mut result = az_light_switch.update_config(None, None, None, None);
-        //     assert_eq!(result, Err(OwnableError::CallerIsNotOwner));
-        //     // when called by an admin
-        //     test_utils::change_caller(accounts.alice);
-        //     result =
-        //         az_light_switch.update_config(Some(accounts.django), Some(3), Some(4), Some(5));
-        //     assert!(result.is_ok());
-        //     let config = az_light_switch.config();
-        //     // * it updates the admin
-        //     assert_eq!(config.admin, accounts.django);
-        //     // * it updates the on_fee
-        //     assert_eq!(config.on_fee, 3);
-        //     // * it updates the off_payment
-        //     assert_eq!(config.off_payment, 4);
-        //     // * it updates the minimum_on_time_in_ms
-        //     assert_eq!(config.minimum_on_time_in_ms, 5)
-        // }
+        #[ink::test]
+        fn test_increase_allowance() {
+            let (accounts, mut btn_distributor) = init();
+            // when called by a non-admin
+            test_utils::change_caller(accounts.alice);
+            // * it raises an error
+            let result = btn_distributor.increase_allowance(accounts.alice, 1_000_000);
+            assert_eq!(
+                result,
+                Err(BtnDistributorError::OwnableError(
+                    OwnableError::CallerIsNotOwner
+                ))
+            );
+        }
     }
 }
