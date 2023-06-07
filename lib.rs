@@ -7,8 +7,10 @@ mod btn_distributor {
             call::{build_call, ExecutionInput, Selector},
             DefaultEnvironment,
         },
+        storage::Mapping,
         LangError,
     };
+
     use openbrush::{
         contracts::ownable::*, contracts::traits::psp22::PSP22Error, modifiers, traits::Storage,
     };
@@ -18,8 +20,9 @@ mod btn_distributor {
     #[derive(Debug, PartialEq, Eq, scale::Encode, scale::Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum BtnDistributorError {
-        PSP22Error(PSP22Error),
+        OrderAlreadyProcessed,
         OwnableError(OwnableError),
+        PSP22Error(PSP22Error),
     }
     impl From<PSP22Error> for BtnDistributorError {
         fn from(error: PSP22Error) -> Self {
@@ -56,6 +59,7 @@ mod btn_distributor {
         #[storage_field]
         ownable: ownable::Data,
         btn: SmartContract,
+        order_details: Mapping<String, Balance>,
     }
 
     impl BtnDistributor {
@@ -64,6 +68,7 @@ mod btn_distributor {
             let mut instance = Self {
                 ownable: Default::default(),
                 btn,
+                order_details: Mapping::default(),
             };
             instance._init_with_owner(Self::env().caller());
             instance
@@ -119,7 +124,14 @@ mod btn_distributor {
             &mut self,
             spender: AccountId,
             delta_value: Balance,
+            order_id: String,
         ) -> Result<(), BtnDistributorError> {
+            if self.order_details.get(order_id.clone()).is_some() {
+                return Err(BtnDistributorError::OrderAlreadyProcessed);
+            } else {
+                self.order_details.insert(order_id, &delta_value);
+            }
+
             let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
                 DefaultEnvironment,
             >()
@@ -199,13 +211,26 @@ mod btn_distributor {
             // when called by a non-admin
             test_utils::change_caller(accounts.alice);
             // * it raises an error
-            let result = btn_distributor.increase_allowance(accounts.alice, 1_000_000);
+            let mut result =
+                btn_distributor.increase_allowance(accounts.alice, 1_000_000, "xxx".to_string());
             assert_eq!(
                 result,
                 Err(BtnDistributorError::OwnableError(
                     OwnableError::CallerIsNotOwner
                 ))
             );
+            // when called by an admin
+            test_utils::change_caller(accounts.bob);
+            // = when order_id exists
+            btn_distributor
+                .order_details
+                .insert("xxx".to_string(), &1_000_000);
+            // = * it raises an error
+            result =
+                btn_distributor.increase_allowance(accounts.alice, 1_000_000, "xxx".to_string());
+            assert_eq!(result, Err(BtnDistributorError::OrderAlreadyProcessed));
+            // = when order_id does not exist
+            // = * it sets the order_id (This needs to be checked in staging)
         }
     }
 }
