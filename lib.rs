@@ -49,7 +49,7 @@ mod btn_distributor {
         feature = "std",
         derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
     )]
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     pub struct Order {
         amount: Balance,
         spender: AccountId,
@@ -92,6 +92,15 @@ mod btn_distributor {
             Config {
                 admin: self.ownable.owner(),
                 btn: self.btn.clone(),
+            }
+        }
+
+        #[ink(message)]
+        pub fn order(&self, order_id: String) -> Result<Order, BtnDistributorError> {
+            if let Some(order) = self.orders.get(order_id) {
+                Ok(order)
+            } else {
+                Err(BtnDistributorError::OrderNotFound)
             }
         }
 
@@ -205,6 +214,40 @@ mod btn_distributor {
             assert_eq!(btn_distributor.btn.code_hash, mock_btn().code_hash);
         }
 
+        // === TEST QUERY ===
+        #[ink::test]
+        fn test_config() {
+            let (accounts, btn_distributor) = init();
+            // * it return owner
+            // * it return btn address and code_hash
+            assert_eq!(btn_distributor.config().admin, accounts.bob);
+            assert_eq!(btn_distributor.config().btn.address, mock_btn().address);
+            assert_eq!(btn_distributor.config().btn.code_hash, mock_btn().code_hash);
+        }
+
+        #[ink::test]
+        fn test_order() {
+            let (accounts, mut btn_distributor) = init();
+
+            // when account does not exist
+            // * it raises an error
+            let mut result = btn_distributor.order("xxx".to_string());
+            assert_eq!(result, Err(BtnDistributorError::OrderNotFound));
+
+            // when order exists
+            let order: Order = Order {
+                amount: 1_000_000,
+                spender: accounts.alice,
+            };
+            btn_distributor.orders.insert("xxx".to_string(), &order);
+            // * it returns the order
+            result = btn_distributor.order("xxx".to_string());
+            let result_unwrapped = result.unwrap();
+            assert_eq!(result_unwrapped.amount, order.amount);
+            assert_eq!(result_unwrapped.spender, order.spender);
+        }
+
+        // === TEST HANDLE ===
         #[ink::test]
         fn test_decrease_allowance() {
             let (accounts, mut btn_distributor) = init();
@@ -220,12 +263,12 @@ mod btn_distributor {
             );
             // when called by an admin
             test_utils::change_caller(accounts.bob);
-            // = when order_detail does not exists
+            // = when order does not exists
             // = * it raises an error
             result = btn_distributor.decrease_allowance("xxx".to_string());
             assert_eq!(result, Err(BtnDistributorError::OrderNotFound));
-            // = when order_detail exists
-            // = * it removes the order_detail (This needs to be checked in staging)
+            // = when order exists
+            // = * it removes the order (This needs to be checked in staging)
         }
 
         #[ink::test]
@@ -244,7 +287,7 @@ mod btn_distributor {
             );
             // when called by an admin
             test_utils::change_caller(accounts.bob);
-            // = when order_detail exists
+            // = when order exists
             let order: Order = Order {
                 amount: 1_000_000,
                 spender: accounts.alice,
@@ -254,8 +297,8 @@ mod btn_distributor {
             result =
                 btn_distributor.increase_allowance(accounts.alice, 1_000_000, "xxx".to_string());
             assert_eq!(result, Err(BtnDistributorError::OrderAlreadyProcessed));
-            // = when order_detail does not exist
-            // = * it sets the order_detail (This needs to be checked in staging)
+            // = when order does not exist
+            // = * it sets the order (This needs to be checked in staging)
         }
     }
 }
