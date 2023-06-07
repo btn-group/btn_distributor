@@ -44,6 +44,17 @@ mod btn_distributor {
         btn: SmartContract,
     }
 
+    #[derive(scale::Decode, scale::Encode)]
+    #[cfg_attr(
+        feature = "std",
+        derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
+    )]
+    #[derive(Debug, Clone)]
+    pub struct Order {
+        amount: Balance,
+        spender: AccountId,
+    }
+
     #[derive(Clone, Debug, scale::Decode, scale::Encode)]
     #[cfg_attr(
         feature = "std",
@@ -60,7 +71,7 @@ mod btn_distributor {
         #[storage_field]
         ownable: ownable::Data,
         btn: SmartContract,
-        order_details: Mapping<String, Balance>,
+        orders: Mapping<String, Order>,
     }
 
     impl BtnDistributor {
@@ -69,7 +80,7 @@ mod btn_distributor {
             let mut instance = Self {
                 ownable: Default::default(),
                 btn,
-                order_details: Mapping::default(),
+                orders: Mapping::default(),
             };
             instance._init_with_owner(Self::env().caller());
             instance
@@ -87,40 +98,37 @@ mod btn_distributor {
         // === HANDLE ===
         #[ink(message)]
         #[modifiers(only_owner)]
-        pub fn decrease_allowance(
-            &mut self,
-            spender: AccountId,
-            delta_value: Balance,
-            order_id: String,
-        ) -> Result<(), BtnDistributorError> {
-            if self.order_details.get(order_id.clone()).is_none() {
-                return Err(BtnDistributorError::OrderNotFound);
-            } else {
-                self.order_details.remove(&order_id);
-            }
-
-            let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
-                DefaultEnvironment,
-            >()
-            .call(self.btn.address)
-            .gas_limit(0)
-            .exec_input(
-                ExecutionInput::new(Selector::new(ink::selector_bytes!("decrease_allowance")))
-                    .push_arg(spender)
-                    .push_arg(delta_value),
-            )
-            .returns::<Result<Result<(), PSP22Error>, LangError>>()
-            .invoke();
-            match call_result {
-                // An error emitted by the smart contracting language.
-                // For more details see ink::LangError.
-                Err(lang_error) => {
-                    panic!("Unexpected ink::LangError: {:?}", lang_error)
+        pub fn decrease_allowance(&mut self, order_id: String) -> Result<(), BtnDistributorError> {
+            if let Some(order) = self.orders.get(order_id.clone()) {
+                self.orders.remove(&order_id);
+                let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
+                    DefaultEnvironment,
+                >(
+                )
+                .call(self.btn.address)
+                .gas_limit(0)
+                .exec_input(
+                    ExecutionInput::new(Selector::new(ink::selector_bytes!("decrease_allowance")))
+                        .push_arg(order.spender)
+                        .push_arg(order.amount),
+                )
+                .returns::<Result<Result<(), PSP22Error>, LangError>>()
+                .invoke();
+                match call_result {
+                    // An error emitted by the smart contracting language.
+                    // For more details see ink::LangError.
+                    Err(lang_error) => {
+                        panic!("Unexpected ink::LangError: {:?}", lang_error)
+                    }
+                    // `Result<(), PSP22Error>` is the return type of
+                    // the method we're calling.
+                    Ok(Err(contract_call_error)) => {
+                        Err(BtnDistributorError::from(contract_call_error))
+                    }
+                    Ok(Ok(())) => Ok(()),
                 }
-                // `Result<(), PSP22Error>` is the return type of
-                // the method we're calling.
-                Ok(Err(contract_call_error)) => Err(BtnDistributorError::from(contract_call_error)),
-                Ok(Ok(())) => Ok(()),
+            } else {
+                Err(BtnDistributorError::OrderNotFound)
             }
         }
 
@@ -131,15 +139,14 @@ mod btn_distributor {
         pub fn increase_allowance(
             &mut self,
             spender: AccountId,
-            delta_value: Balance,
+            amount: Balance,
             order_id: String,
         ) -> Result<(), BtnDistributorError> {
-            if self.order_details.get(order_id.clone()).is_some() {
+            if self.orders.get(order_id.clone()).is_some() {
                 return Err(BtnDistributorError::OrderAlreadyProcessed);
-            } else {
-                self.order_details.insert(order_id, &delta_value);
             }
 
+            self.orders.insert(order_id, &Order { amount, spender });
             let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
                 DefaultEnvironment,
             >()
@@ -148,7 +155,7 @@ mod btn_distributor {
             .exec_input(
                 ExecutionInput::new(Selector::new(ink::selector_bytes!("increase_allowance")))
                     .push_arg(spender)
-                    .push_arg(delta_value),
+                    .push_arg(amount),
             )
             .returns::<Result<Result<(), PSP22Error>, LangError>>()
             .invoke();
@@ -204,8 +211,7 @@ mod btn_distributor {
             // when called by a non-admin
             test_utils::change_caller(accounts.alice);
             // * it raises an error
-            let mut result =
-                btn_distributor.decrease_allowance(accounts.alice, 1_000_000, "xxx".to_string());
+            let mut result = btn_distributor.decrease_allowance("xxx".to_string());
             assert_eq!(
                 result,
                 Err(BtnDistributorError::OwnableError(
@@ -216,8 +222,7 @@ mod btn_distributor {
             test_utils::change_caller(accounts.bob);
             // = when order_detail does not exists
             // = * it raises an error
-            result =
-                btn_distributor.decrease_allowance(accounts.alice, 1_000_000, "xxx".to_string());
+            result = btn_distributor.decrease_allowance("xxx".to_string());
             assert_eq!(result, Err(BtnDistributorError::OrderNotFound));
             // = when order_detail exists
             // = * it removes the order_detail (This needs to be checked in staging)
@@ -240,9 +245,11 @@ mod btn_distributor {
             // when called by an admin
             test_utils::change_caller(accounts.bob);
             // = when order_detail exists
-            btn_distributor
-                .order_details
-                .insert("xxx".to_string(), &1_000_000);
+            let order: Order = Order {
+                amount: 1_000_000,
+                spender: accounts.alice,
+            };
+            btn_distributor.orders.insert("xxx".to_string(), &order);
             // = * it raises an error
             result =
                 btn_distributor.increase_allowance(accounts.alice, 1_000_000, "xxx".to_string());
