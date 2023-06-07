@@ -21,6 +21,7 @@ mod btn_distributor {
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum BtnDistributorError {
         OrderAlreadyProcessed,
+        OrderNotFound,
         OwnableError(OwnableError),
         PSP22Error(PSP22Error),
     }
@@ -90,7 +91,14 @@ mod btn_distributor {
             &mut self,
             spender: AccountId,
             delta_value: Balance,
+            order_id: String,
         ) -> Result<(), BtnDistributorError> {
+            if self.order_details.get(order_id.clone()).is_none() {
+                return Err(BtnDistributorError::OrderNotFound);
+            } else {
+                self.order_details.remove(&order_id);
+            }
+
             let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
                 DefaultEnvironment,
             >()
@@ -196,13 +204,23 @@ mod btn_distributor {
             // when called by a non-admin
             test_utils::change_caller(accounts.alice);
             // * it raises an error
-            let result = btn_distributor.decrease_allowance(accounts.alice, 1_000_000);
+            let mut result =
+                btn_distributor.decrease_allowance(accounts.alice, 1_000_000, "xxx".to_string());
             assert_eq!(
                 result,
                 Err(BtnDistributorError::OwnableError(
                     OwnableError::CallerIsNotOwner
                 ))
             );
+            // when called by an admin
+            test_utils::change_caller(accounts.bob);
+            // = when order_detail does not exists
+            // = * it raises an error
+            result =
+                btn_distributor.decrease_allowance(accounts.alice, 1_000_000, "xxx".to_string());
+            assert_eq!(result, Err(BtnDistributorError::OrderNotFound));
+            // = when order_detail exists
+            // = * it removes the order_detail (This needs to be checked in staging)
         }
 
         #[ink::test]
@@ -221,7 +239,7 @@ mod btn_distributor {
             );
             // when called by an admin
             test_utils::change_caller(accounts.bob);
-            // = when order_id exists
+            // = when order_detail exists
             btn_distributor
                 .order_details
                 .insert("xxx".to_string(), &1_000_000);
@@ -229,8 +247,8 @@ mod btn_distributor {
             result =
                 btn_distributor.increase_allowance(accounts.alice, 1_000_000, "xxx".to_string());
             assert_eq!(result, Err(BtnDistributorError::OrderAlreadyProcessed));
-            // = when order_id does not exist
-            // = * it sets the order_id (This needs to be checked in staging)
+            // = when order_detail does not exist
+            // = * it sets the order_detail (This needs to be checked in staging)
         }
     }
 }
