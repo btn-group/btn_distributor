@@ -31,14 +31,15 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-This is a smart contract that we created to help safely distribute Button ($BTN) on Aleph Zero. The idea is that we will send all possible $BTN to the smart contract. By increasing allowance and letting users collect, there will be very little room for error.
+This is a smart contract to facilitate the safe distribution of Button ($BTN) on Aleph Zero. It is the final step of the Button ($BUTT) migration from Secret Network. All minted $BTN will be initially sent to this smart contract. With the amount and address details collected from the Secret Network migration contract, we will increase the account allowances accordingly.
 
 ### Features
 
 1. Initialise with admin and $BTN smart contract details.
-2. Allow admin to increase_allowance for a user and store the details. The key for details is a String as it will be an encryption of the id.
-3. Allow admin to decrease_allowance for a user and remove the details. This is in case the user has entered the wrong address.
+2. Allow admin to increase_allowance for an account and store the details. The key for details is a String as it will be an encryption of the corresponding Secret Network migration order id.
+3. Allow admin to decrease_allowance for an order and remove the details. This is in case the user has entered the wrong address.
 4. Allow user to collect their $BTN.
+5. Allow retrieving order details.
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
