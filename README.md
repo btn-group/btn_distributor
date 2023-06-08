@@ -6,9 +6,6 @@
   </a>
 
   <h3 align="center">Button ($BTN) Distributor</h3>
-  <p align="center">
-    <a href="https://btn-group-hackathon.herokuapp.com/" target="_blank">Try it out</a>
-  </p>
 </div>
 
 <!-- TABLE OF CONTENTS -->
