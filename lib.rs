@@ -2,15 +2,7 @@
 
 #[ink::contract]
 mod btn_distributor {
-    use ink::{
-        env::{
-            call::{build_call, ExecutionInput, Selector},
-            DefaultEnvironment,
-        },
-        storage::Mapping,
-        LangError,
-    };
-
+    use ink::{env::DefaultEnvironment, storage::Mapping};
     use openbrush::{
         contracts::ownable::*,
         contracts::traits::psp22::{PSP22Error, PSP22Ref},
@@ -52,7 +44,7 @@ mod btn_distributor {
         feature = "std",
         derive(scale_info::TypeInfo, ink::storage::traits::StorageLayout)
     )]
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, PartialEq)]
     pub struct Order {
         amount: Balance,
         spender: AccountId,
@@ -111,39 +103,21 @@ mod btn_distributor {
         #[ink(message)]
         #[modifiers(only_owner)]
         pub fn decrease_allowance(&mut self, order_id: String) -> Result<(), BtnDistributorError> {
-            if let Some(order) = self.orders.get(order_id.clone()) {
-                self.orders.remove(&order_id);
-                let call_result: Result<Result<(), PSP22Error>, ink::LangError> = build_call::<
-                    DefaultEnvironment,
-                >(
-                )
-                .call(self.btn.address)
-                .gas_limit(0)
-                .exec_input(
-                    ExecutionInput::new(Selector::new(ink::selector_bytes!("decrease_allowance")))
-                        .push_arg(order.spender)
-                        .push_arg(order.amount),
-                )
-                .returns::<Result<Result<(), PSP22Error>, LangError>>()
-                .invoke();
-                match call_result {
-                    // An error emitted by the smart contracting language.
-                    // For more details see ink::LangError.
-                    Err(lang_error) => {
-                        panic!("Unexpected ink::LangError: {:?}", lang_error)
-                    }
-                    // `Result<(), PSP22Error>` is the return type of
-                    // the method we're calling.
-                    Ok(Err(contract_call_error)) => {
-                        Err(BtnDistributorError::from(contract_call_error))
-                    }
-                    Ok(Ok(())) => Ok(()),
+            if let Some(order) = self.orders.get(&order_id) {
+                let call_result: Result<(), PSP22Error> =
+                    PSP22Ref::decrease_allowance(&self.btn.address, order.spender, order.amount);
+                if call_result.is_err() {
+                    Err(BtnDistributorError::from(call_result.unwrap_err()))
+                } else {
+                    self.orders.remove(&order_id);
+                    Ok(())
                 }
             } else {
                 Err(BtnDistributorError::OrderNotFound)
             }
         }
 
+        // Could not get call builder to work.
         // https://use.ink/basics/cross-contract-calling#createbuilder
         // https://github.com/Brushfam/openbrush-contracts/blob/73783af2f887eeb1fb3ebb4a012d5f3ff4598b56/docs/docs/smart-contracts/example/errors.md?plain=1#L16
         #[ink(message)]
@@ -154,7 +128,7 @@ mod btn_distributor {
             amount: Balance,
             order_id: String,
         ) -> Result<(), BtnDistributorError> {
-            if self.orders.get(order_id.clone()).is_some() {
+            if self.orders.get(&order_id).is_some() {
                 return Err(BtnDistributorError::OrderAlreadyProcessed);
             }
 
