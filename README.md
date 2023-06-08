@@ -31,6 +31,15 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
+This is a smart contract that we created to help safely distribute Button ($BTN) on Aleph Zero. The idea is that we will send all possible $BTN to the smart contract. By increasing allowance and letting users collect, there will be very little room for error.
+
+### Features
+
+1. Initialise with admin and $BTN smart contract details.
+2. Allow admin to increase_allowance for a user and store the details. The key for details is a String as it will be an encryption of the id.
+3. Allow admin to decrease_allowance for a user and remove the details. This is in case the user has entered the wrong address.
+4. Allow user to collect their $BTN.
+
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 ### Built With
@@ -87,3 +96,6 @@ Note that blocks are only created when you execute a function in substrate-contr
 
 - https://use.ink/basics/cross-contract-calling#builders
 - https://github.com/Brushfam/openbrush-contracts/blob/a255c212debdace8b82f84cb104e84b716ccd6ac/contracts/src/token/psp22_pallet/psp22_pallet.rs#L125
+- https://github.com/RottenKiwi/Panorama-Swap-INK-SC/blob/a811b10eb9e108192686e6d13ffcd6ad0fddd533/staking_contact/lib.rs#L348
+- https://docs.rs/ink_env/latest/ink_env/call/struct.CallBuilder.html#method.try_invoke-2
+

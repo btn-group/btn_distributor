@@ -2,7 +2,8 @@
 
 #[ink::contract]
 mod btn_distributor {
-    use ink::{env::DefaultEnvironment, storage::Mapping};
+    use ink::prelude::vec;
+    use ink::storage::Mapping;
     use openbrush::{
         contracts::ownable::*,
         contracts::traits::psp22::{PSP22Error, PSP22Ref},
@@ -101,6 +102,26 @@ mod btn_distributor {
 
         // === HANDLE ===
         #[ink(message)]
+        pub fn collect(&mut self) -> Result<(), BtnDistributorError> {
+            let caller: AccountId = self.env().caller();
+            let contract_address: AccountId = self.env().account_id();
+            let caller_allowance: Balance =
+                PSP22Ref::allowance(&self.btn.address, contract_address, caller);
+            let call_result: Result<(), PSP22Error> = PSP22Ref::transfer_from(
+                &self.btn.address,
+                contract_address,
+                caller,
+                caller_allowance,
+                vec![],
+            );
+            if call_result.is_err() {
+                return Err(BtnDistributorError::from(call_result.unwrap_err()));
+            }
+
+            Ok(())
+        }
+
+        #[ink(message)]
         #[modifiers(only_owner)]
         pub fn decrease_allowance(&mut self, order_id: String) -> Result<(), BtnDistributorError> {
             if let Some(order) = self.orders.get(&order_id) {
@@ -150,7 +171,10 @@ mod btn_distributor {
         use openbrush::test_utils;
 
         // === HELPER FUNCTIONS ===
-        fn init() -> (DefaultAccounts<DefaultEnvironment>, BtnDistributor) {
+        fn init() -> (
+            DefaultAccounts<ink::env::DefaultEnvironment>,
+            BtnDistributor,
+        ) {
             let accounts = test_utils::accounts();
             test_utils::change_caller(accounts.bob);
             let btn_distributor = BtnDistributor::new(mock_btn());
